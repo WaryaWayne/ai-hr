@@ -1,6 +1,6 @@
 {
   "name": "ai-hr",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Local AI employee performance reviews for coding agents, with usage scans, API-equivalent cost estimates, and terminal report cards.",
   "type": "module",
   "repository": {
