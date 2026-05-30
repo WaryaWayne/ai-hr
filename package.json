@@ -1,0 +1,72 @@
+{
+  "name": "ai-hr",
+  "version": "0.0.1",
+  "description": "Local AI employee performance reviews for coding agents, with usage scans, API-equivalent cost estimates, and terminal report cards.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WaryaWayne/ai-hr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WaryaWayne/ai-hr/issues"
+  },
+  "homepage": "https://github.com/WaryaWayne/ai-hr",
+  "bin": {
+    "ai-hr": "dist/cli.js",
+    "aihr": "dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "build": "bun build packages/cli/src/Main.ts --target bun --outfile dist/cli.js",
+    "cli": "bun run packages/cli/src/Main.ts",
+    "publish:npm": "pnpm build && npm publish --access public --ignore-scripts",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm typecheck && vitest run",
+    "prepare": "effect-language-service patch"
+  },
+  "keywords": [
+    "ai-hr",
+    "aihr",
+    "codex",
+    "claude-code",
+    "opencode",
+    "coding-agents",
+    "cli",
+    "local-first",
+    "token-usage",
+    "api-cost-estimates",
+    "usage-report",
+    "effect",
+    "bun"
+  ],
+  "author": "Warya Wayne",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "devDependencies": {
+    "@effect/language-service": "^0.86.1",
+    "@effect/vitest": "4.0.0-beta.74",
+    "@types/bun": "1.3.14",
+    "@types/node": "^25.6.2",
+    "typescript": "6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.15",
+    "@effect/platform-node": "4.0.0-beta.74",
+    "@openai/codex-sdk": "^0.135.0",
+    "@opencode-ai/sdk": "^1.15.12",
+    "effect": "4.0.0-beta.74"
+  }
+}
