@@ -7,7 +7,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun", "node"],
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "exactOptionalPropertyTypes": true,
     "plugins": [
