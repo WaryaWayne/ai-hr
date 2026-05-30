@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite"
+import { DatabaseSync } from "node:sqlite"
 import { Context, Effect, FileSystem, Layer, Path, Result, Schema } from "effect"
 import {
   SourceReadError,
@@ -62,13 +62,13 @@ export const readOpenCodeRows = Effect.fn("OpenCodeLocal.readRows")(function*(db
     Effect.gen(function*() {
       const db = yield* Effect.acquireRelease(
         Effect.try({
-          try: () => new Database(dbPath, { readonly: true }),
+          try: () => new DatabaseSync(dbPath, { readOnly: true }),
           catch: (cause) => new SourceReadError({ source: dbPath, message: "Could not open OpenCode database.", cause })
         }),
         (db) => Effect.sync(() => db.close())
       )
       return yield* Effect.try({
-        try: () => db.query(query).all() as ReadonlyArray<unknown>,
+        try: () => db.prepare(query).all() as ReadonlyArray<unknown>,
         catch: (cause) => new SourceReadError({ source: dbPath, message: "Could not query OpenCode sessions.", cause })
       })
     })

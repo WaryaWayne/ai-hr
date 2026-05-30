@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect, Layer } from "effect"

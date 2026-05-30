@@ -6,10 +6,9 @@ AI HR scans local usage history from Codex, Claude Code, and OpenCode, normalize
 
 ## Install
 
-AI HR currently runs on Bun because the CLI uses the Bun Effect platform and reads OpenCode's local SQLite database through `bun:sqlite`.
+AI HR runs on Node.js. The CLI uses the Effect Node platform and reads OpenCode's local SQLite database through Node's built-in SQLite support.
 
 ```sh
-bunx ai-hr report --since 30d
 npx ai-hr report --since 30d
 ```
 
@@ -91,4 +90,4 @@ pnpm build
 pnpm publish:npm
 ```
 
-The build writes `dist/cli.js`, and npm publishes that built CLI plus this README and license. `publish:npm` runs the build before publishing publicly and ignores lifecycle scripts so the Effect language-service patch step does not run during publish.
+The build writes `dist/cli.js` as a Node executable, and npm publishes that built CLI plus this README and license. `publish:npm` runs the build before publishing publicly and ignores lifecycle scripts so the Effect language-service patch step does not run during publish.
