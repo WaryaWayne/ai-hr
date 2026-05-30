@@ -44,14 +44,14 @@ export const rowsToUsageEvents = Effect.fn("OpenCodeNormalize.rowsToUsageEvents"
         kind: "opencode-sqlite",
         path: dbPath,
         sessionId: row.id,
-        title: row.title ?? undefined,
-        repository: row.directory ?? undefined
+        ...(row.title === null ? {} : { title: row.title }),
+        ...(row.directory === null ? {} : { repository: row.directory })
       },
       sessionId: row.id,
       occurredAt,
       model: row.model ?? "unknown-opencode-model",
-      agentName: row.agent ?? undefined,
-      repository: row.directory ?? undefined,
+      ...(row.agent === null ? {} : { agentName: row.agent }),
+      ...(row.directory === null ? {} : { repository: row.directory }),
       inputTokens: row.tokens_input,
       cachedInputTokens: 0,
       outputTokens: row.tokens_output,
