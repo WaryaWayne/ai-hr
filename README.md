@@ -71,6 +71,14 @@ The terminal report includes:
 
 The pricing notes section calls out approximation assumptions. Treat the totals as an API-equivalent model of local usage, not as a subscription bill or provider invoice.
 
+## Related tools
+
+AI HR is part of a small family of local-first tools for working with coding-agent history. They all read your local stores directly and never upload your data.
+
+- [`codex-relink`](https://github.com/WaryaWayne/codex-relink) — a read-only helper for finding missing or hard-to-locate Codex CLI chats that match the current working directory, and printing the command needed to resume them.
+- [`claude-relink`](https://github.com/WaryaWayne/claude-relink) — the same thing for Claude Code: it finds sessions matching the current working directory and prints the command needed to resume them.
+- [`tailings`](https://github.com/WaryaWayne/tailings) — for when you want to gather a directory's *entire* agent history into the folder rather than resume one chat. It pulls the sessions and memories that Claude Code, Codex, OpenCode, and Gemini produced for the current directory into `./AGENTS.md` + `./.tailings/`, so the next agent — in any tool — is instantly caught up.
+
 ## Development
 
 ```sh
