@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, FileSystem, Layer, Option, Path, Result, Schema } from "effect"
+import { Context, DateTime, Effect, FileSystem, Layer, Option, Path, Result, Schema, Stream } from "effect"
 import {
   NonNegativeInt,
   SourceReadError,
@@ -86,7 +86,9 @@ export const scanCodexSessions = Effect.fn("CodexLocal.scan")(function*(period: 
 
   for (const file of files) {
     const fileEvents = yield* readCodexUsageFile(file)
-    events.push(...fileEvents.filter((event) => inPeriod(event.occurredAt, period)))
+    for (const event of fileEvents) {
+      if (inPeriod(event.occurredAt, period)) events.push(event)
+    }
   }
 
   return events
@@ -99,7 +101,7 @@ export const explainCodexSession = Effect.fn("CodexLocal.explain")(function*(ses
 
   for (const file of files) {
     if (file.includes(sessionId)) {
-      events.push(...(yield* readCodexUsageFile(file)))
+      for (const event of yield* readCodexUsageFile(file)) events.push(event)
     }
   }
 
@@ -110,16 +112,35 @@ export const readCodexUsageFile = Effect.fn("CodexLocal.readFile")(function*(fil
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
   const fallbackDate = yield* fileDate(filePath)
-  const content = yield* fs.readFileString(filePath).pipe(
-    Effect.mapError((cause) => new SourceReadError({ source: filePath, message: "Could not read Codex session file.", cause }))
+  const state = makeCodexState(path.basename(filePath).replace(/\.jsonl$/, ""))
+  const events: Array<UsageEvent> = []
+
+  const lines = fs.stream(filePath).pipe(
+    Stream.mapError((cause) =>
+      new SourceReadError({ source: filePath, message: "Could not read Codex session file.", cause })
+    ),
+    Stream.decodeText,
+    Stream.splitLines,
+    Stream.zipWithIndex
   )
 
-  return yield* normalizeCodexJsonLines({
-    filePath,
-    sessionIdFallback: path.basename(filePath).replace(/\.jsonl$/, ""),
-    fallbackDate,
-    lines: content.split(/\r?\n/)
-  })
+  yield* lines.pipe(
+    Stream.runForEach(([line, index]) =>
+      normalizeCodexJsonLine({
+        filePath,
+        line,
+        lineNumber: index + 1,
+        fallbackDate,
+        state
+      }).pipe(
+        Effect.map((event) => {
+          if (event !== undefined) events.push(event)
+        })
+      )
+    )
+  )
+
+  return events
 })
 
 export const normalizeCodexJsonLines = Effect.fn("CodexLocal.normalize")(function*(input: {
@@ -128,74 +149,93 @@ export const normalizeCodexJsonLines = Effect.fn("CodexLocal.normalize")(functio
   readonly fallbackDate: DateTime.Utc
   readonly lines: ReadonlyArray<string>
 }) {
-  const state: CodexState = {
-    sessionId: input.sessionIdFallback,
-    model: "gpt-5-codex",
-    repository: undefined,
-    seenTotals: new Set()
-  }
+  const state = makeCodexState(input.sessionIdFallback)
   const events: Array<UsageEvent> = []
 
   for (let index = 0; index < input.lines.length; index++) {
-    const line = input.lines[index]?.trim()
-    if (line === undefined || line.length === 0) continue
+    const line = input.lines[index]
+    if (line === undefined) continue
 
-    const record = yield* parseJsonLine(line, input.filePath, index + 1)
-    applyMetadata(record, state)
-
-    const eventMessage = Schema.decodeUnknownOption(CodexEventMessageTokenCountRecordSchema)(record)
-    if (Option.isSome(eventMessage)) {
-      if (eventMessage.value.payload.info !== null) {
-        const totalSignature = usageSignature(eventMessage.value.payload.info.total_token_usage)
-        if (!state.seenTotals.has(totalSignature)) {
-          state.seenTotals.add(totalSignature)
-          const event = yield* makeCodexUsageEvent({
-            filePath: input.filePath,
-            lineNumber: index + 1,
-            state,
-            usage: eventMessage.value.payload.info.last_token_usage,
-            occurredAt: safeDateTime(eventMessage.value.timestamp, input.fallbackDate),
-            idSuffix: totalSignature
-          })
-          events.push(event)
-        }
-      }
-      continue
-    }
-
-    const tokenCount = Schema.decodeUnknownOption(CodexTokenCountRecordSchema)(record)
-    if (Option.isSome(tokenCount)) {
-      const totalSignature = usageSignature(tokenCount.value.info.total_token_usage)
-      if (!state.seenTotals.has(totalSignature)) {
-        state.seenTotals.add(totalSignature)
-        const event = yield* makeCodexUsageEvent({
-          filePath: input.filePath,
-          lineNumber: index + 1,
-          state,
-          usage: tokenCount.value.info.last_token_usage,
-          occurredAt: safeDateTime(tokenCount.value.timestamp, input.fallbackDate),
-          idSuffix: totalSignature
-        })
-        events.push(event)
-      }
-      continue
-    }
-
-    const turnCompleted = Schema.decodeUnknownOption(CodexTurnCompletedRecordSchema)(record)
-    if (Option.isSome(turnCompleted)) {
-      const event = yield* makeCodexUsageEvent({
-        filePath: input.filePath,
-        lineNumber: index + 1,
-        state,
-        usage: turnCompleted.value.usage,
-        occurredAt: safeDateTime(turnCompleted.value.timestamp, input.fallbackDate),
-        idSuffix: usageSignature(turnCompleted.value.usage)
-      })
-      events.push(event)
-    }
+    const event = yield* normalizeCodexJsonLine({
+      filePath: input.filePath,
+      line,
+      lineNumber: index + 1,
+      fallbackDate: input.fallbackDate,
+      state
+    })
+    if (event !== undefined) events.push(event)
   }
 
   return events
+})
+
+const normalizeCodexJsonLine = Effect.fn("CodexLocal.normalizeLine")(function*(input: {
+  readonly filePath: string
+  readonly line: string
+  readonly lineNumber: number
+  readonly fallbackDate: DateTime.Utc
+  readonly state: CodexState
+}) {
+  const line = input.line.trim()
+  if (line.length === 0) return undefined
+
+  const record = yield* parseJsonLine(line, input.filePath, input.lineNumber)
+  applyMetadata(record, input.state)
+
+  const eventMessage = Schema.decodeUnknownOption(CodexEventMessageTokenCountRecordSchema)(record)
+  if (Option.isSome(eventMessage)) {
+    if (eventMessage.value.payload.info === null) return undefined
+
+    const totalSignature = usageSignature(eventMessage.value.payload.info.total_token_usage)
+    if (input.state.seenTotals.has(totalSignature)) return undefined
+
+    input.state.seenTotals.add(totalSignature)
+    return yield* makeCodexUsageEvent({
+      filePath: input.filePath,
+      lineNumber: input.lineNumber,
+      state: input.state,
+      usage: eventMessage.value.payload.info.last_token_usage,
+      occurredAt: safeDateTime(eventMessage.value.timestamp, input.fallbackDate),
+      idSuffix: totalSignature
+    })
+  }
+
+  const tokenCount = Schema.decodeUnknownOption(CodexTokenCountRecordSchema)(record)
+  if (Option.isSome(tokenCount)) {
+    const totalSignature = usageSignature(tokenCount.value.info.total_token_usage)
+    if (input.state.seenTotals.has(totalSignature)) return undefined
+
+    input.state.seenTotals.add(totalSignature)
+    return yield* makeCodexUsageEvent({
+      filePath: input.filePath,
+      lineNumber: input.lineNumber,
+      state: input.state,
+      usage: tokenCount.value.info.last_token_usage,
+      occurredAt: safeDateTime(tokenCount.value.timestamp, input.fallbackDate),
+      idSuffix: totalSignature
+    })
+  }
+
+  const turnCompleted = Schema.decodeUnknownOption(CodexTurnCompletedRecordSchema)(record)
+  if (Option.isSome(turnCompleted)) {
+    return yield* makeCodexUsageEvent({
+      filePath: input.filePath,
+      lineNumber: input.lineNumber,
+      state: input.state,
+      usage: turnCompleted.value.usage,
+      occurredAt: safeDateTime(turnCompleted.value.timestamp, input.fallbackDate),
+      idSuffix: usageSignature(turnCompleted.value.usage)
+    })
+  }
+
+  return undefined
+})
+
+const makeCodexState = (sessionId: string): CodexState => ({
+  sessionId,
+  model: "gpt-5-codex",
+  repository: undefined,
+  seenTotals: new Set()
 })
 
 const discoverCodexFiles = Effect.fn("CodexLocal.discover")(function*(dir: string) {

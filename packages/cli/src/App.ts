@@ -65,7 +65,7 @@ export const runScan = Effect.fn("Cli.runScan")(function*(input: {
     yield* Console.log(`Checking ${source}...`)
     const events = yield* collectUsageEvents([source], period)
     yield* Console.log(`Got ${events.length} usage events for ${source}.`)
-    allEvents.push(...events)
+    appendUsageEvents(allEvents, events)
   }
 
   return `Scan complete. ${allEvents.length} local usage events found.`
@@ -121,9 +121,9 @@ export const runExplain = Effect.fn("Cli.runExplain")(function*(input: {
   const opencode = yield* OpenCodeLocalSessions
 
   for (const source of selected) {
-    if (source === "codex") events.push(...(yield* codex.explain(input.session)))
-    if (source === "claude") events.push(...(yield* claude.explain(input.session)))
-    if (source === "opencode") events.push(...(yield* opencode.explain(input.session)))
+    if (source === "codex") appendUsageEvents(events, yield* codex.explain(input.session))
+    if (source === "claude") appendUsageEvents(events, yield* claude.explain(input.session))
+    if (source === "opencode") appendUsageEvents(events, yield* opencode.explain(input.session))
   }
 
   const pricing = yield* PricingCatalog
@@ -195,13 +195,17 @@ const collectUsageEvents = Effect.fn("Cli.collectUsageEvents")(function*(
   const events: Array<UsageEvent> = []
 
   for (const source of sources) {
-    if (source === "codex") events.push(...(yield* codex.scan(period)))
-    if (source === "claude") events.push(...(yield* claude.scan(period)))
-    if (source === "opencode") events.push(...(yield* opencode.scan(period)))
+    if (source === "codex") appendUsageEvents(events, yield* codex.scan(period))
+    if (source === "claude") appendUsageEvents(events, yield* claude.scan(period))
+    if (source === "opencode") appendUsageEvents(events, yield* opencode.scan(period))
   }
 
   return events.filter((event) => usageEventTotalTokens(event) > 0)
 })
+
+const appendUsageEvents = (target: Array<UsageEvent>, source: ReadonlyArray<UsageEvent>): void => {
+  for (const event of source) target.push(event)
+}
 
 const parseSources = (input: string): ReadonlyArray<SourceName> => {
   const parts = input.split(",").map((part) => part.trim().toLowerCase()).filter((part) => part.length > 0)
