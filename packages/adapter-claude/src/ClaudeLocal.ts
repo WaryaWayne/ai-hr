@@ -48,7 +48,9 @@ export const scanClaudeSessions = Effect.fn("ClaudeLocal.scan")(function*(period
 
   for (const file of files) {
     const fileEvents = yield* readClaudeUsageFile(file)
-    events.push(...fileEvents.filter((event) => inPeriod(event.occurredAt, period)))
+    for (const event of fileEvents) {
+      if (inPeriod(event.occurredAt, period)) events.push(event)
+    }
   }
 
   return events
@@ -61,7 +63,7 @@ export const explainClaudeSession = Effect.fn("ClaudeLocal.explain")(function*(s
 
   for (const file of files) {
     if (file.includes(sessionId)) {
-      events.push(...(yield* readClaudeUsageFile(file)))
+      for (const event of yield* readClaudeUsageFile(file)) events.push(event)
     }
   }
 
